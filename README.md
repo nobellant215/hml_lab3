@@ -1,65 +1,81 @@
-# Masters-Level ML Systems Lab 3
+# Triton GEMM Lab
 
-## Triton GEMM: Tensor Cores, Double Buffering, and PyTorch Integration
+This repo is a lab skeleton for Triton GEMM optimization with a fused linear path.
 
-This repository is a starter scaffold for implementing and analyzing Triton GEMM kernels.
+## Repo Tree
 
-## Repository Layout
+```text
+triton-gemm-lab/
+  README.md
+  pyproject.toml
+  requirements.txt
+  .gitignore
+  Makefile
 
-- `src/triton_gemm_lab/kernels.py`: Triton GEMM kernels (naive + tiled + pipeline).
-- `src/triton_gemm_lab/validate.py`: correctness checks against `torch.matmul`.
-- `src/triton_gemm_lab/benchmark.py`: TFLOP/s benchmark harness.
-- `src/triton_gemm_lab/sweep.py`: `num_stages` sweep and CSV output.
-- `src/triton_gemm_lab/mylinear.py`: `MyLinear` module backed by Triton GEMM.
-- `src/triton_gemm_lab/model_integration.py`: Tiny MLP eager vs `torch.compile`.
-- `src/triton_gemm_lab/vision_integration.py`: open-source vision model integration.
-- `scripts/`: shell wrappers for common assignment workflows.
-- `results/`: output CSV/tables.
-- `profiles/`: Nsight Compute profile output.
+  src/
+    gemm_lab/
+      __init__.py
+      ops.py
+      linear.py
+      gemm_fused.py
+      kernels/
+        __init__.py
+        gemm_naive.py
+        gemm_tiled.py
+        gemm_autotuned.py
+      utils/
+        __init__.py
+        correctness.py
+        bench.py
 
-## Setup
+  tests/
+    test_gemm_correctness.py
+    test_linear_integration.py
+
+  scripts/
+    bench_gemm.py
+    run_mlp_demo.py
+    profile_gemm.py
+```
+
+## Student Tasks
+
+Implement and improve:
+- `src/gemm_lab/kernels/gemm_naive.py`
+- `src/gemm_lab/kernels/gemm_tiled.py`
+- `src/gemm_lab/kernels/gemm_autotuned.py`
+
+Keep correctness tests passing and report speedups plus profiling screenshots/analysis.
+
+## Fused Path
+
+`src/gemm_lab/gemm_fused.py` provides:
+- `fused_linear_relu(x, weight_t, bias=None, relu=True)`
+- `FusedLinearReLU(nn.Module)`
+
+Fallback behavior:
+- If Triton fused constraints are not met, it warns and falls back to:
+  - `torch.addmm(...)`
+  - optional `torch.relu(...)`
+
+## MNIST Demo
+
+`run_mlp_demo.py` runs inference only on a 3-layer MLP (`784 -> 256 -> 128 -> 10`):
+- hidden layers: fused (`linear + bias + relu`)
+- output layer: non-fused linear logits
+
+Data behavior:
+- Attempts MNIST auto-download.
+- Falls back to synthetic tensors with warning if MNIST is unavailable.
+
+## Commands
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
+
+make test
+make bench
+make demo
+make profile
 ```
-
-## Quick Start
-
-```bash
-# Correctness against torch.matmul for multiple shapes
-bash scripts/run_correctness.sh
-
-# Baseline and tiled benchmark
-bash scripts/bench.sh
-
-# Sweep num_stages in {1,2,3,4,5}
-bash scripts/sweep_num_stages.sh
-
-# Optional Nsight Compute profile (requires ncu + NVIDIA GPU)
-bash scripts/profile_ncu.sh
-
-# Tiny MLP integration path (eager + torch.compile)
-python -m triton_gemm_lab.model_integration --device cuda --dtype fp16
-
-# Open-source vision models with Triton linear replacement
-bash scripts/run_vision_models.sh
-```
-
-## Assignment Mapping
-
-- Part A (Baseline + Tiled GEMM): `naive_gemm` and `tiled_gemm` in `kernels.py`.
-- Tensor Core Investigation: `tl.dot`, tile multiples of 16, compare FP16/BF16 vs FP32.
-- Double Buffering: vary `num_stages` via `pipeline_gemm` and run `sweep.py`.
-- Model Integration: `MyLinear` for tiny MLP and torchvision models.
-
-## Deliverables Checklist
-
-- [ ] Working naive and optimized Triton GEMM.
-- [ ] Tuned configuration with documented best parameters.
-- [ ] Performance table (naive vs optimized vs torch.matmul).
-- [ ] Tensor-core evidence from Nsight Compute.
-- [ ] `num_stages` sweep results + analysis.
-- [ ] 2-4 page report.

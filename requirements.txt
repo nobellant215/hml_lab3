@@ -1,6 +1,4 @@
 torch>=2.3
 triton>=2.3
 torchvision>=0.18
-numpy>=1.26
-pandas>=2.0
 pytest>=8.0
