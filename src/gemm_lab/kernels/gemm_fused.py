@@ -98,7 +98,7 @@ def fused_linear_relu(
         print("[gemm_fused] launching Triton fused linear+bias+relu kernel")
 
     raise NotImplementedError(
-        "TODO(student): implement fused_linear_relu in src/gemm_lab/gemm_fused.py"
+        "TODO(student): implement fused_linear_relu in src/gemm_lab/kernels/gemm_fused.py"
     )
 
 
