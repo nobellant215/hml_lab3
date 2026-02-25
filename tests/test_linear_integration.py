@@ -66,13 +66,10 @@ def test_fused_module_matches_reference_block() -> None:
     assert torch.allclose(y_fused, y_ref, atol=2e-1, rtol=2e-1)
 
 
-def test_fused_fallback_on_cpu_warns_and_matches() -> None:
+def test_fused_on_cpu_raises_error() -> None:
     x = torch.randn((8, 16), dtype=torch.float32)
     w_t = torch.randn((16, 4), dtype=torch.float32)
     b = torch.randn((4,), dtype=torch.float32)
 
-    with pytest.warns(UserWarning, match="fallback"):
-        y = fused_linear_relu(x, w_t, b, relu=True)
-
-    ref = torch.relu(torch.addmm(b, x, w_t))
-    assert torch.allclose(y, ref)
+    with pytest.raises((RuntimeError, ValueError), match="Triton|CUDA"):
+        _ = fused_linear_relu(x, w_t, b, relu=True)

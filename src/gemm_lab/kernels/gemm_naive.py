@@ -46,57 +46,34 @@ if triton is not None:
         BLOCK_N: tl.constexpr,
         BLOCK_K: tl.constexpr,
     ):
-        pid_m = tl.program_id(0)
-        pid_n = tl.program_id(1)
+        """
+        TODO(student): implement a baseline tiled GEMM kernel.
 
-        offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
-        offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
-        offs_k = tl.arange(0, BLOCK_K)
-
-        acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
-
-        for k_start in range(0, K, BLOCK_K):
-            a_ptrs = a_ptr + offs_m[:, None] * stride_am + (k_start + offs_k)[None, :] * stride_ak
-            b_ptrs = b_ptr + (k_start + offs_k)[:, None] * stride_bk + offs_n[None, :] * stride_bn
-
-            a_mask = (offs_m[:, None] < M) & ((k_start + offs_k)[None, :] < K)
-            b_mask = ((k_start + offs_k)[:, None] < K) & (offs_n[None, :] < N)
-
-            a = tl.load(a_ptrs, mask=a_mask, other=0.0)
-            b = tl.load(b_ptrs, mask=b_mask, other=0.0)
-            acc += tl.dot(a, b)
-
-        c_ptrs = c_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
-        c_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
-        tl.store(c_ptrs, acc, mask=c_mask)
+        Suggested steps:
+        1) Map `program_id(0/1)` to tile coordinates over M and N.
+        2) Build `offs_m`, `offs_n`, `offs_k` with `tl.arange`.
+        3) Loop over K by `BLOCK_K` and load tiles with masks.
+        4) Accumulate with `tl.dot` into FP32 accumulator.
+        5) Store C tile with boundary mask.
+        """
+        # Placeholder so skeleton branch is explicit.
+        # Replace this with a full Triton kernel body.
+        return
 
 
 def triton_gemm_naive(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """
+    TODO(student): launch the naive kernel and return output tensor C.
+
+    Requirements:
+    - Keep FP32 accumulation in kernel.
+    - Use conservative blocks first (e.g., 16x16x16).
+    - Validate against torch.matmul.
+    """
     if triton is None:
         raise RuntimeError("Triton is not installed.")
 
-    M, N, K = _check_inputs(a, b)
-    c = torch.empty((M, N), device=a.device, dtype=torch.float32)
-
-    block_m, block_n, block_k = 16, 16, 16
-    grid = (triton.cdiv(M, block_m), triton.cdiv(N, block_n))
-    _gemm_kernel_naive[grid](
-        a,
-        b,
-        c,
-        M,
-        N,
-        K,
-        a.stride(0),
-        a.stride(1),
-        b.stride(0),
-        b.stride(1),
-        c.stride(0),
-        c.stride(1),
-        BLOCK_M=block_m,
-        BLOCK_N=block_n,
-        BLOCK_K=block_k,
-        num_warps=2,
-        num_stages=1,
+    _check_inputs(a, b)
+    raise NotImplementedError(
+        "TODO(student): implement triton_gemm_naive in src/gemm_lab/kernels/gemm_naive.py"
     )
-    return c

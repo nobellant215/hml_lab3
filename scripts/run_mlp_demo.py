@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import time
-import warnings
 
 import torch
 from torch import nn
@@ -64,10 +63,7 @@ def _mnist_loader(batch_size: int, num_batches: int, data_dir: str):
         y = ds.targets[:total]
         return x, y
     except Exception as exc:
-        warnings.warn(f"MNIST unavailable ({exc}); using synthetic fallback", stacklevel=2)
-        x = torch.randn((total, 1, 28, 28), dtype=torch.float32)
-        y = torch.randint(0, 10, (total,), dtype=torch.long)
-        return x, y
+        raise RuntimeError(f"MNIST load failed: {exc}") from exc
 
 
 def _bench(model: nn.Module, x: torch.Tensor, batch_size: int, warmup: int, iters: int) -> float:

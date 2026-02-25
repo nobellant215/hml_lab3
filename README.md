@@ -44,6 +44,11 @@ Implement and improve:
 - `src/gemm_lab/kernels/gemm_naive.py`
 - `src/gemm_lab/kernels/gemm_tiled.py`
 - `src/gemm_lab/kernels/gemm_autotuned.py`
+- `src/gemm_lab/gemm_fused.py`
+
+Skeleton behavior:
+- The files above intentionally contain TODO stubs.
+- They currently raise `NotImplementedError` until student code is added.
 
 Keep correctness tests passing and report speedups plus profiling screenshots/analysis.
 
@@ -53,10 +58,8 @@ Keep correctness tests passing and report speedups plus profiling screenshots/an
 - `fused_linear_relu(x, weight_t, bias=None, relu=True)`
 - `FusedLinearReLU(nn.Module)`
 
-Fallback behavior:
-- If Triton fused constraints are not met, it warns and falls back to:
-  - `torch.addmm(...)`
-  - optional `torch.relu(...)`
+Error behavior:
+- If Triton fused constraints are not met, it raises an explicit error.
 
 ## MNIST Demo
 
@@ -66,7 +69,7 @@ Fallback behavior:
 
 Data behavior:
 - Attempts MNIST auto-download.
-- Falls back to synthetic tensors with warning if MNIST is unavailable.
+- Raises an explicit error if MNIST cannot be loaded.
 
 ## Commands
 

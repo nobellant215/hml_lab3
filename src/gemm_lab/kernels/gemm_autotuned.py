@@ -28,13 +28,11 @@ def _check_inputs(a: torch.Tensor, b: torch.Tensor) -> tuple[int, int, int]:
 
 if triton is not None:
 
+    # TODO(student): replace placeholder config list with real search space.
+    # Start with 3-6 configs varying BLOCK_M/N/K, num_warps, and num_stages.
     @triton.autotune(
         configs=[
-            triton.Config({"BLOCK_M": 32, "BLOCK_N": 32, "BLOCK_K": 32}, num_warps=2, num_stages=1),
             triton.Config({"BLOCK_M": 64, "BLOCK_N": 64, "BLOCK_K": 32}, num_warps=4, num_stages=2),
-            triton.Config({"BLOCK_M": 128, "BLOCK_N": 64, "BLOCK_K": 32}, num_warps=8, num_stages=3),
-            triton.Config({"BLOCK_M": 64, "BLOCK_N": 128, "BLOCK_K": 32}, num_warps=8, num_stages=3),
-            triton.Config({"BLOCK_M": 128, "BLOCK_N": 128, "BLOCK_K": 32}, num_warps=8, num_stages=4),
         ],
         key=["M", "N", "K"],
     )
@@ -56,51 +54,31 @@ if triton is not None:
         BLOCK_N: tl.constexpr,
         BLOCK_K: tl.constexpr,
     ):
-        pid_m = tl.program_id(0)
-        pid_n = tl.program_id(1)
+        """
+        TODO(student): implement autotuned GEMM kernel body.
 
-        offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
-        offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
-        offs_k = tl.arange(0, BLOCK_K)
-
-        acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
-
-        for k_start in range(0, K, BLOCK_K):
-            a_ptrs = a_ptr + offs_m[:, None] * stride_am + (k_start + offs_k)[None, :] * stride_ak
-            b_ptrs = b_ptr + (k_start + offs_k)[:, None] * stride_bk + offs_n[None, :] * stride_bn
-
-            a_mask = (offs_m[:, None] < M) & ((k_start + offs_k)[None, :] < K)
-            b_mask = ((k_start + offs_k)[:, None] < K) & (offs_n[None, :] < N)
-
-            a = tl.load(a_ptrs, mask=a_mask, other=0.0)
-            b = tl.load(b_ptrs, mask=b_mask, other=0.0)
-            acc += tl.dot(a, b)
-
-        c_ptrs = c_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
-        c_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
-        tl.store(c_ptrs, acc, mask=c_mask)
+        Notes:
+        - Reuse tiled-kernel math structure.
+        - Keep FP32 accumulation.
+        - Ensure output correctness first, then tune configs.
+        """
+        # Placeholder so skeleton branch is explicit.
+        return
 
 
 def triton_gemm_autotuned(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """
+    TODO(student): launch autotuned kernel using meta-dependent grid.
+
+    Expected shape of launch code:
+    - Allocate C (float32 accumulator output).
+    - Define grid as lambda meta: (cdiv(M, meta["BLOCK_M"]), cdiv(N, meta["BLOCK_N"]))
+    - Launch kernel with strides and M/N/K.
+    """
     if triton is None:
         raise RuntimeError("Triton is not installed.")
 
-    M, N, K = _check_inputs(a, b)
-    c = torch.empty((M, N), device=a.device, dtype=torch.float32)
-
-    grid = lambda meta: (triton.cdiv(M, meta["BLOCK_M"]), triton.cdiv(N, meta["BLOCK_N"]))
-    _gemm_kernel_autotuned[grid](
-        a,
-        b,
-        c,
-        M,
-        N,
-        K,
-        a.stride(0),
-        a.stride(1),
-        b.stride(0),
-        b.stride(1),
-        c.stride(0),
-        c.stride(1),
+    _check_inputs(a, b)
+    raise NotImplementedError(
+        "TODO(student): implement triton_gemm_autotuned in src/gemm_lab/kernels/gemm_autotuned.py"
     )
-    return c
