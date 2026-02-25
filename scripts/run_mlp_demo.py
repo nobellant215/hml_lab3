@@ -7,7 +7,7 @@ import warnings
 import torch
 from torch import nn
 
-from gemm_lab.gemm_fused import FusedLinearReLU
+from gemm_lab.kernels.gemm_fused import FusedLinearReLU
 from gemm_lab.linear import MyLinear
 
 

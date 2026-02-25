@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from gemm_lab.gemm_fused import FusedLinearReLU, fused_linear_relu
+from gemm_lab.kernels.gemm_fused import FusedLinearReLU, fused_linear_relu
 from gemm_lab.linear import MyLinear
 
 

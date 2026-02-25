@@ -17,12 +17,12 @@ triton-gemm-lab/
       __init__.py
       ops.py
       linear.py
-      gemm_fused.py
       kernels/
         __init__.py
         gemm_naive.py
         gemm_tiled.py
         gemm_autotuned.py
+        gemm_fused.py
       utils/
         __init__.py
         correctness.py
@@ -49,7 +49,7 @@ Keep correctness tests passing and report speedups plus profiling screenshots/an
 
 ## Fused Path
 
-`src/gemm_lab/gemm_fused.py` provides:
+`src/gemm_lab/kernels/gemm_fused.py` provides:
 - `fused_linear_relu(x, weight_t, bias=None, relu=True)`
 - `FusedLinearReLU(nn.Module)`
 
