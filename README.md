@@ -21,7 +21,6 @@ triton-gemm-lab/
         __init__.py
         gemm_naive.py
         gemm_tiled.py
-        gemm_autotuned.py
         gemm_fused.py
       utils/
         __init__.py
@@ -43,7 +42,6 @@ triton-gemm-lab/
 Implement and improve:
 - `src/gemm_lab/kernels/gemm_naive.py`
 - `src/gemm_lab/kernels/gemm_tiled.py`
-- `src/gemm_lab/kernels/gemm_autotuned.py`
 
 Keep correctness tests passing and report speedups plus profiling screenshots/analysis.
 

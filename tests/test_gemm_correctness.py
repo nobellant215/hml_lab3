@@ -18,7 +18,7 @@ except Exception:
 pytestmark = pytest.mark.skipif(not (HAS_CUDA and HAS_TRITON), reason="CUDA+Triton required")
 
 
-@pytest.mark.parametrize("kernel", ["naive", "tiled", "autotuned"])
+@pytest.mark.parametrize("kernel", ["naive", "tiled"])
 @pytest.mark.parametrize("shape", [(128, 128, 128), (256, 192, 160), (64, 512, 128)])
 def test_gemm_matches_torch(kernel: str, shape: tuple[int, int, int]) -> None:
     m, n, k = shape

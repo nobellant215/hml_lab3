@@ -29,46 +29,33 @@ def _check_inputs(a: torch.Tensor, b: torch.Tensor) -> tuple[int, int, int]:
 if triton is not None:
 
     @triton.jit
-    def _gemm_kernel_naive(
+    def gemm_point_kernel_kconstexpr(
         a_ptr,
         b_ptr,
         c_ptr,
         M,
         N,
-        K,
         stride_am,
         stride_ak,
         stride_bk,
         stride_bn,
         stride_cm,
         stride_cn,
-        BLOCK_M: tl.constexpr,
-        BLOCK_N: tl.constexpr,
-        BLOCK_K: tl.constexpr,
+        K: tl.constexpr,
     ):
-        pid_m = tl.program_id(0)
-        pid_n = tl.program_id(1)
+        # Intentionally naive baseline: one program computes one output element.
+        i = tl.program_id(0)
+        j = tl.program_id(1)
 
-        offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
-        offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
-        offs_k = tl.arange(0, BLOCK_K)
+        acc = tl.zeros((), dtype=tl.float32)
 
-        acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
+        # True scalar loop over K. This is only valid because K is constexpr.
+        for k in range(0, K):
+            a = tl.load(a_ptr + i * stride_am + k * stride_ak, mask=i < M, other=0.0).to(tl.float32)
+            b = tl.load(b_ptr + k * stride_bk + j * stride_bn, mask=j < N, other=0.0).to(tl.float32)
+            acc += a * b
 
-        for k_start in range(0, K, BLOCK_K):
-            a_ptrs = a_ptr + offs_m[:, None] * stride_am + (k_start + offs_k)[None, :] * stride_ak
-            b_ptrs = b_ptr + (k_start + offs_k)[:, None] * stride_bk + offs_n[None, :] * stride_bn
-
-            a_mask = (offs_m[:, None] < M) & ((k_start + offs_k)[None, :] < K)
-            b_mask = ((k_start + offs_k)[:, None] < K) & (offs_n[None, :] < N)
-
-            a = tl.load(a_ptrs, mask=a_mask, other=0.0)
-            b = tl.load(b_ptrs, mask=b_mask, other=0.0)
-            acc += tl.dot(a, b)
-
-        c_ptrs = c_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
-        c_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
-        tl.store(c_ptrs, acc, mask=c_mask)
+        tl.store(c_ptr + i * stride_cm + j * stride_cn, acc, mask=(i < M) & (j < N))
 
 
 def triton_gemm_naive(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -78,25 +65,22 @@ def triton_gemm_naive(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     M, N, K = _check_inputs(a, b)
     c = torch.empty((M, N), device=a.device, dtype=torch.float32)
 
-    block_m, block_n, block_k = 16, 16, 16
-    grid = (triton.cdiv(M, block_m), triton.cdiv(N, block_n))
-    _gemm_kernel_naive[grid](
+    # One kernel instance per output element.
+    grid = (M, N)
+    gemm_point_kernel_kconstexpr[grid](
         a,
         b,
         c,
         M,
         N,
-        K,
         a.stride(0),
         a.stride(1),
         b.stride(0),
         b.stride(1),
         c.stride(0),
         c.stride(1),
-        BLOCK_M=block_m,
-        BLOCK_N=block_n,
-        BLOCK_K=block_k,
-        num_warps=2,
+        K=K,
+        num_warps=1,
         num_stages=1,
     )
     return c

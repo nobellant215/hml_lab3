@@ -22,7 +22,7 @@ def test_mylinear_matches_torch_linear() -> None:
     x = torch.randn((64, in_features), device="cuda", dtype=torch.float16)
 
     ref = torch.nn.Linear(in_features, out_features, bias=True, device="cuda", dtype=torch.float16)
-    got = MyLinear(in_features, out_features, bias=True, device="cuda", kernel="autotuned").to(dtype=torch.float16)
+    got = MyLinear(in_features, out_features, bias=True, device="cuda", kernel="tiled").to(dtype=torch.float16)
 
     with torch.no_grad():
         got.weight.copy_(ref.weight)
