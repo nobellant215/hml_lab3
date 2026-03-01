@@ -31,7 +31,6 @@ def main() -> None:
     bench_fns = {
         "naive": lambda x, y: gemm(x, y, cfg=GemmConfig(kernel="naive")),
         "tiled": lambda x, y: gemm(x, y, cfg=GemmConfig(kernel="tiled")),
-        "autotuned": lambda x, y: gemm(x, y, cfg=GemmConfig(kernel="autotuned")),
         "torch.matmul": lambda x, y: torch.matmul(x, y),
     }
 

@@ -66,7 +66,7 @@ if triton is not None:
         - Optional activation: y = relu(y)
 
         Hints:
-        - Reuse GEMM tiling structure from tiled/autotuned kernels.
+        - Reuse GEMM tiling structure from the tiled kernel.
         - Bias is per-output feature (`N` dimension).
         - Apply ReLU after accumulation (and bias add if present).
         """

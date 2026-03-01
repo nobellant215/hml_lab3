@@ -16,7 +16,7 @@ class MyLinear(nn.Module):
         *,
         bias: bool = True,
         device: str = "cuda",
-        kernel: str = "autotuned",
+        kernel: str = "tiled",
     ):
         super().__init__()
         self.weight = nn.Parameter(torch.empty(out_features, in_features, device=device))

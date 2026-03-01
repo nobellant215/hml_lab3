@@ -5,16 +5,15 @@ from typing import Literal, Optional
 
 import torch
 
-from gemm_lab.kernels.gemm_autotuned import triton_gemm_autotuned
 from gemm_lab.kernels.gemm_naive import triton_gemm_naive
 from gemm_lab.kernels.gemm_tiled import triton_gemm_tiled
 
-KernelKind = Literal["naive", "tiled", "autotuned"]
+KernelKind = Literal["naive", "tiled"]
 
 
 @dataclass(frozen=True)
 class GemmConfig:
-    kernel: KernelKind = "autotuned"
+    kernel: KernelKind = "tiled"
     allow_tf32: bool = True
 
 
@@ -47,7 +46,5 @@ def gemm(a: torch.Tensor, b: torch.Tensor, *, cfg: Optional[GemmConfig] = None) 
         return triton_gemm_naive(a, b)
     if cfg.kernel == "tiled":
         return triton_gemm_tiled(a, b)
-    if cfg.kernel == "autotuned":
-        return triton_gemm_autotuned(a, b)
 
     raise ValueError(f"Unknown kernel kind: {cfg.kernel}")

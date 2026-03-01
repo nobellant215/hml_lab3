@@ -29,32 +29,34 @@ def _check_inputs(a: torch.Tensor, b: torch.Tensor) -> tuple[int, int, int]:
 if triton is not None:
 
     @triton.jit
-    def _gemm_kernel_naive(
+    def gemm_point_kernel_kconstexpr(
         a_ptr,
         b_ptr,
         c_ptr,
         M,
         N,
-        K,
         stride_am,
         stride_ak,
         stride_bk,
         stride_bn,
         stride_cm,
         stride_cn,
-        BLOCK_M: tl.constexpr,
-        BLOCK_N: tl.constexpr,
-        BLOCK_K: tl.constexpr,
+        K: tl.constexpr,
     ):
         """
-        TODO(student): implement a baseline tiled GEMM kernel.
+        TODO(student): implement a truly naive pointwise GEMM kernel.
 
         Suggested steps:
-        1) Map `program_id(0/1)` to tile coordinates over M and N.
-        2) Build `offs_m`, `offs_n`, `offs_k` with `tl.arange`.
-        3) Loop over K by `BLOCK_K` and load tiles with masks.
-        4) Accumulate with `tl.dot` into FP32 accumulator.
-        5) Store C tile with boundary mask.
+        1) Use one program per output element: `i = program_id(0)`, `j = program_id(1)`.
+        2) Allocate a scalar FP32 accumulator with `tl.zeros((), dtype=tl.float32)`.
+        3) Write a true scalar loop: `for k in range(0, K)`.
+        4) Load `A[i, k]` and `B[k, j]`, cast to FP32, and accumulate `a * b`.
+        5) Store a single output value `C[i, j]`.
+
+        Important:
+        - `K` is marked `tl.constexpr`, so this baseline only works when Triton
+          can specialize the kernel for the concrete K value at launch time.
+        - This is intentionally slow and should serve only as a baseline.
         """
         # Placeholder so skeleton branch is explicit.
         # Replace this with a full Triton kernel body.
@@ -66,9 +68,10 @@ def triton_gemm_naive(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     TODO(student): launch the naive kernel and return output tensor C.
 
     Requirements:
-    - Keep FP32 accumulation in kernel.
-    - Use conservative blocks first (e.g., 16x16x16).
-    - Validate against torch.matmul.
+        - Keep FP32 accumulation in kernel.
+        - Launch one program per output element using `grid = (M, N)`.
+        - Pass `K` as a `tl.constexpr` meta-parameter.
+        - Validate against torch.matmul.
     """
     if triton is None:
         raise RuntimeError("Triton is not installed.")
