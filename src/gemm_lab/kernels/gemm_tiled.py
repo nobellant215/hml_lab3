@@ -47,15 +47,14 @@ if triton is not None:
         BLOCK_K: tl.constexpr,
     ):
         """
-        TODO(student): implement optimized tiled GEMM.
+        TODO: implement optimized tiled GEMM.
 
         Suggested optimizations:
-        - Use larger BLOCK_M/BLOCK_N than naive.
         - Keep BLOCK_* as multiples of 16 for tensor-core-friendly shapes.
         - Tune num_warps and num_stages by shape bucket.
         - Ensure masked loads/stores are correct on boundary tiles.
         """
-        # Placeholder so skeleton branch is explicit.
+
         return
 
 
@@ -69,17 +68,17 @@ def triton_gemm_tiled(
     num_warps: int = 4,
     num_stages: int = 1,
 ) -> torch.Tensor:
-    """
-    TODO(student): launch tiled kernel with configurable blocking.
-
-    Deliverable intent:
-    - This should outperform naive kernel on medium/large shapes.
-    - Keep interface stable so scripts/tests can call it directly.
-    """
     if triton is None:
         raise RuntimeError("Triton is not installed.")
 
-    _check_inputs(a, b)
+    """
+    TODO: launch tiled kernel.
+        - Allocate / define output matrix
+        - Set grid size
+        - You may use _check_inputs function to get M, N, K dimensions
+        - Call kernel implelemented above with appropriate parameters
+    """
+
     raise NotImplementedError(
-        "TODO(student): implement triton_gemm_tiled in src/gemm_lab/kernels/gemm_tiled.py"
+        "TODO: implement triton_gemm_tiled in src/gemm_lab/kernels/gemm_tiled.py"
     )

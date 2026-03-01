@@ -58,7 +58,7 @@ if triton is not None:
         BLOCK_K: tl.constexpr,
     ):
         """
-        TODO(student): implement fused linear+bias+(optional)relu kernel.
+        TODO(student): implement fused linear+bias+relu kernel.
 
         Target math:
         - Base: y = x @ weight_t
@@ -70,7 +70,19 @@ if triton is not None:
         - Bias is per-output feature (`N` dimension).
         - Apply ReLU after accumulation (and bias add if present).
         """
-        # Placeholder so skeleton branch is explicit.
+        
+        if HAS_BIAS:
+            """
+            TODO: load bias for this block and add to accumulator after matmul
+            """
+            pass
+        
+        if DO_RELU:
+            """
+            TODO: apply relu to accumulator
+            """
+            pass    
+        
         return
 
 
@@ -87,24 +99,29 @@ def fused_linear_relu(
     num_warps: int = 4,
     num_stages: int = 2,
 ) -> torch.Tensor:
-    """
-    Compute y = relu(x @ weight_t + bias) if relu=True else x @ weight_t + bias.
-
-    TODO(student): implement launch path for fused kernel.
-    """
+    
     _validate_triton_inputs(x, weight_t, bias)
 
     if debug_kernel:
         print("[gemm_fused] launching Triton fused linear+bias+relu kernel")
 
+    """
+    TODO: implement launch path for fused kernel.
+        - Allocate / define output matrix
+        - Set grid size
+        - You may use _check_inputs function to get M, N, K dimensions
+        - Call kernel implelemented above with appropriate parameters
+    
+    Compute y = relu(x @ weight_t + bias) if relu=True else x @ weight_t + bias.
+    """
+
     raise NotImplementedError(
-        "TODO(student): implement fused_linear_relu in src/gemm_lab/kernels/gemm_fused.py"
+        "TODO: implement fused_linear_relu in src/gemm_lab/kernels/gemm_fused.py"
     )
 
 
 class FusedLinearReLU(nn.Module):
     """Linear layer with fused optional ReLU in one call path."""
-
     def __init__(
         self,
         in_features: int,

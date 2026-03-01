@@ -44,7 +44,7 @@ if triton is not None:
         K: tl.constexpr,
     ):
         """
-        TODO(student): implement a truly naive pointwise GEMM kernel.
+        TODO: implement a truly naive pointwise GEMM kernel.
 
         Suggested steps:
         1) Use one program per output element: `i = program_id(0)`, `j = program_id(1)`.
@@ -56,7 +56,7 @@ if triton is not None:
         Important:
         - `K` is marked `tl.constexpr`, so this baseline only works when Triton
           can specialize the kernel for the concrete K value at launch time.
-        - This is intentionally slow and should serve only as a baseline.
+        - This is intentionally slow!
         """
         # Placeholder so skeleton branch is explicit.
         # Replace this with a full Triton kernel body.
@@ -64,19 +64,17 @@ if triton is not None:
 
 
 def triton_gemm_naive(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-    """
-    TODO(student): launch the naive kernel and return output tensor C.
-
-    Requirements:
-        - Keep FP32 accumulation in kernel.
-        - Launch one program per output element using `grid = (M, N)`.
-        - Pass `K` as a `tl.constexpr` meta-parameter.
-        - Validate against torch.matmul.
-    """
     if triton is None:
         raise RuntimeError("Triton is not installed.")
 
-    _check_inputs(a, b)
+    """
+    TODO: launch the naive kernel and return output tensor C.
+        - Allocate / define output matrix
+        - Set grid size: Launch one program per output element using `grid = (M, N)`.
+        - You may use _check_inputs function to get M, N, K dimensions
+        - Call kernel implelemented above with appropriate parameters
+    """
+    
     raise NotImplementedError(
-        "TODO(student): implement triton_gemm_naive in src/gemm_lab/kernels/gemm_naive.py"
+        "TODO: implement triton_gemm_naive in src/gemm_lab/kernels/gemm_naive.py"
     )
