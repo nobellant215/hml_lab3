@@ -39,19 +39,41 @@ class MLPFused(nn.Module):
         return self.fc3(x)
 
 
-def copy_weights(unfused: MLPUnfused, fused: MLPFused) -> None:
+class MLPTorch(nn.Module):
+    def __init__(self, device: str, dtype: torch.dtype):
+        super().__init__()
+        self.fc1 = nn.Linear(784, 256, bias=True, device=device, dtype=dtype)
+        self.fc2 = nn.Linear(256, 128, bias=True, device=device, dtype=dtype)
+        self.fc3 = nn.Linear(128, 10, bias=True, device=device, dtype=dtype)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        return self.fc3(x)
+
+
+def copy_weights(unfused: MLPUnfused, fused: MLPFused, torch_mlp: MLPTorch) -> None:
     with torch.no_grad():
         fused.fc1.weight.copy_(unfused.fc1.weight)
         if fused.fc1.bias is not None and unfused.fc1.bias is not None:
             fused.fc1.bias.copy_(unfused.fc1.bias)
+        torch_mlp.fc1.weight.copy_(unfused.fc1.weight)
+        if unfused.fc1.bias is not None:
+            torch_mlp.fc1.bias.copy_(unfused.fc1.bias)
 
         fused.fc2.weight.copy_(unfused.fc2.weight)
         if fused.fc2.bias is not None and unfused.fc2.bias is not None:
             fused.fc2.bias.copy_(unfused.fc2.bias)
+        torch_mlp.fc2.weight.copy_(unfused.fc2.weight)
+        if unfused.fc2.bias is not None:
+            torch_mlp.fc2.bias.copy_(unfused.fc2.bias)
 
         fused.fc3.weight.copy_(unfused.fc3.weight)
         if fused.fc3.bias is not None and unfused.fc3.bias is not None:
             fused.fc3.bias.copy_(unfused.fc3.bias)
+        torch_mlp.fc3.weight.copy_(unfused.fc3.weight)
+        if unfused.fc3.bias is not None:
+            torch_mlp.fc3.bias.copy_(unfused.fc3.bias)
 
 
 def _mnist_loader(batch_size: int, num_batches: int, data_dir: str):
@@ -111,21 +133,29 @@ def main() -> None:
 
     unfused = MLPUnfused(device=args.device).to(dtype=dtype)
     fused = MLPFused(device=args.device).to(dtype=dtype)
-    copy_weights(unfused, fused)
+    torch_mlp = MLPTorch(device=args.device, dtype=dtype)
+    copy_weights(unfused, fused, torch_mlp)
 
     if args.compile == 1:
         unfused = torch.compile(unfused)
         fused = torch.compile(fused)
+        torch_mlp = torch.compile(torch_mlp)
 
+    torch_ms = _bench(torch_mlp, x, args.batch_size, args.warmup, args.iters) * 1e3
     unfused_ms = _bench(unfused, x, args.batch_size, args.warmup, args.iters) * 1e3
     fused_ms = _bench(fused, x, args.batch_size, args.warmup, args.iters) * 1e3
 
-    speedup = unfused_ms / fused_ms
+    fused_vs_unfused = unfused_ms / fused_ms
+    fused_vs_torch = torch_ms / fused_ms
+    unfused_vs_torch = torch_ms / unfused_ms
     mode = "compile" if args.compile == 1 else "eager"
     print(f"mode={mode} dtype={args.dtype} batch={args.batch_size}")
+    print(f"torch_mlp:   {torch_ms:.3f} ms")
     print(f"unfused_mlp: {unfused_ms:.3f} ms")
     print(f"fused_mlp:   {fused_ms:.3f} ms")
-    print(f"speedup:     {speedup:.3f}x")
+    print(f"fused_vs_unfused: {fused_vs_unfused:.3f}x")
+    print(f"fused_vs_torch:   {fused_vs_torch:.3f}x")
+    print(f"unfused_vs_torch: {unfused_vs_torch:.3f}x")
 
 
 if __name__ == "__main__":

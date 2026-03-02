@@ -14,6 +14,7 @@ def main() -> None:
     parser.add_argument("--k", type=int, default=4096)
     parser.add_argument("--dtype", choices=["fp16", "bf16", "fp32"], default="fp16")
     parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--relu", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--out", type=str, default="profiles/gemm_profile")
     args = parser.parse_args()
 
@@ -44,6 +45,10 @@ def main() -> None:
         args.dtype,
         "--device",
         args.device,
+        "--relu" if args.relu else "--no-relu",
+        "--cases",
+        "naive_gemm+bias+relu",
+        "tiled_gemm+bias+relu",
     ]
 
     print("Running:", " ".join(cmd))
