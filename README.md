@@ -62,6 +62,8 @@ Error behavior:
 ## MNIST Demo
 
 `run_mlp_demo.py` runs inference only on a 3-layer MLP (`784 -> 256 -> 128 -> 10`):
+- torch baseline: `torch.nn.Linear` + `torch.relu`
+- unfused custom: `MyLinear` + `torch.relu`
 - hidden layers: fused (`linear + bias + relu`)
 - output layer: non-fused linear logits
 
@@ -75,8 +77,8 @@ Data behavior:
 pip install -r requirements.txt
 pip install -e .
 
-make test
-make bench
-make demo
-make profile
+make test     # Functionality & Build test
+make bench    # Compare gemm+bias+relu across torch, fused, tiled, naive paths
+make demo     # Run MLP with custom GeMM kernels
+make profile  # ncu profiling 
 ```
