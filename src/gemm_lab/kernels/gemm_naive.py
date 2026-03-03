@@ -29,52 +29,73 @@ def _check_inputs(a: torch.Tensor, b: torch.Tensor) -> tuple[int, int, int]:
 if triton is not None:
 
     @triton.jit
-    def gemm_point_kernel_kconstexpr(
+    def gemm_block_kernel(
         a_ptr,
         b_ptr,
         c_ptr,
         M,
         N,
+        K,
         stride_am,
         stride_ak,
         stride_bk,
         stride_bn,
         stride_cm,
         stride_cn,
-        K: tl.constexpr,
+        BLOCK_SIZE: tl.constexpr,
     ):
-        """
-        TODO: implement a truly naive pointwise GEMM kernel.
+        pid_m = tl.program_id(0)
+        pid_n = tl.program_id(1)
 
-        Suggested steps:
-        1) Use one program per output element: `i = program_id(0)`, `j = program_id(1)`.
-        2) Allocate a scalar FP32 accumulator with `tl.zeros((), dtype=tl.float32)`.
-        3) Write a true scalar loop: `for k in range(0, K)`.
-        4) Load `A[i, k]` and `B[k, j]`, cast to FP32, and accumulate `a * b`.
-        5) Store a single output value `C[i, j]`.
+        lane = tl.arange(0, BLOCK_SIZE * BLOCK_SIZE)
+        offs_m = pid_m * BLOCK_SIZE + (lane % BLOCK_SIZE)
+        offs_n = pid_n * BLOCK_SIZE + (lane // BLOCK_SIZE)
 
-        Important:
-        - `K` is marked `tl.constexpr`, so this baseline only works when Triton
-          can specialize the kernel for the concrete K value at launch time.
-        - This is intentionally slow!
-        """
-        # Placeholder so skeleton branch is explicit.
-        # Replace this with a full Triton kernel body.
-        return
+        # Naive baseline: each program computes a BLOCK_SIZE x BLOCK_SIZE output patch
+        # using a scalar loop over K, without any shared-memory style tiling.
+        acc = tl.zeros((BLOCK_SIZE * BLOCK_SIZE,), dtype=tl.float32)
+        for k in range(0, K):
+            a = tl.load(a_ptr + offs_m * stride_am + k * stride_ak, mask=offs_m < M, other=0.0).to(tl.float32)
+            b = tl.load(b_ptr + k * stride_bk + offs_n * stride_bn, mask=offs_n < N, other=0.0).to(tl.float32)
+            acc += a * b
+
+        tl.store(
+            c_ptr + offs_m * stride_cm + offs_n * stride_cn,
+            acc,
+            mask=(offs_m < M) & (offs_n < N),
+        )
 
 
-def triton_gemm_naive(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+def triton_gemm_naive(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    *,
+    block_size: int = 16,
+    num_warps: int = 4,
+    num_stages: int = 1,
+) -> torch.Tensor:
     if triton is None:
         raise RuntimeError("Triton is not installed.")
 
-    """
-    TODO: launch the naive kernel and return output tensor C.
-        - Allocate / define output matrix
-        - Set grid size: Launch one program per output element using `grid = (M, N)`.
-        - You may use _check_inputs function to get M, N, K dimensions
-        - Call kernel implelemented above with appropriate parameters
-    """
-    
-    raise NotImplementedError(
-        "TODO: implement triton_gemm_naive in src/gemm_lab/kernels/gemm_naive.py"
+    M, N, K = _check_inputs(a, b)
+    c = torch.empty((M, N), device=a.device, dtype=torch.float32)
+
+    grid = (triton.cdiv(M, block_size), triton.cdiv(N, block_size))
+    gemm_block_kernel[grid](
+        a,
+        b,
+        c,
+        M,
+        N,
+        K,
+        a.stride(0),
+        a.stride(1),
+        b.stride(0),
+        b.stride(1),
+        c.stride(0),
+        c.stride(1),
+        BLOCK_SIZE=block_size,
+        num_warps=num_warps,
+        num_stages=num_stages,
     )
+    return c
