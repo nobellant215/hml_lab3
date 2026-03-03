@@ -44,16 +44,24 @@ if triton is not None:
         stride_cn,
         BLOCK_SIZE: tl.constexpr,
     ):
-        """
-        TODO: implement a naive GEMM kernel.
+        pid_m = tl.program_id(0)
+        pid_n = tl.program_id(1)
 
-        Suggested mapping:
-        - Use `pid_m = tl.program_id(0)` and `pid_n = tl.program_id(1)`.
-        - Map lanes within a BLOCK_SIZE x BLOCK_SIZE output tile.
-        - Accumulate over K with scalar loads from A and B.
-        - Store results into C with masked writes for boundary tiles.
-        """
-        return
+        lane = tl.arange(0, BLOCK_SIZE * BLOCK_SIZE)
+        offs_m = pid_m * BLOCK_SIZE + (lane % BLOCK_SIZE)
+        offs_n = pid_n * BLOCK_SIZE + (lane // BLOCK_SIZE)
+
+        acc = tl.zeros((BLOCK_SIZE * BLOCK_SIZE,), dtype=tl.float32)
+        for k in range(0, K):
+            a = tl.load(a_ptr + offs_m * stride_am + k * stride_ak, mask=offs_m < M, other=0.0).to(tl.float32)
+            b = tl.load(b_ptr + k * stride_bk + offs_n * stride_bn, mask=offs_n < N, other=0.0).to(tl.float32)
+            acc += a * b
+
+        tl.store(
+            c_ptr + offs_m * stride_cm + offs_n * stride_cn,
+            acc,
+            mask=(offs_m < M) & (offs_n < N),
+        )
 
 
 def triton_gemm_naive(
@@ -67,14 +75,25 @@ def triton_gemm_naive(
     if triton is None:
         raise RuntimeError("Triton is not installed.")
 
-    """
-    TODO: launch the naive kernel and return output tensor C.
-        - Use `_check_inputs(a, b)` to get `M, N, K`
-        - Allocate output tensor `c`
-        - Define a grid over output tiles
-        - Launch `_gemm_kernel_naive`
-    """
+    M, N, K = _check_inputs(a, b)
+    c = torch.empty((M, N), device=a.device, dtype=torch.float32)
 
-    raise NotImplementedError(
-        "TODO: implement triton_gemm_naive in src/gemm_lab/kernels/gemm_naive.py"
+    grid = (triton.cdiv(M, block_size), triton.cdiv(N, block_size))
+    _gemm_kernel_naive[grid](
+        a,
+        b,
+        c,
+        M,
+        N,
+        K,
+        a.stride(0),
+        a.stride(1),
+        b.stride(0),
+        b.stride(1),
+        c.stride(0),
+        c.stride(1),
+        BLOCK_SIZE=block_size,
+        num_warps=num_warps,
+        num_stages=num_stages,
     )
+    return c

@@ -46,16 +46,29 @@ if triton is not None:
         BLOCK_N: tl.constexpr,
         BLOCK_K: tl.constexpr,
     ):
-        """
-        TODO: implement optimized tiled GEMM.
+        pid_m = tl.program_id(0)
+        pid_n = tl.program_id(1)
 
-        Suggested optimizations:
-        - Keep BLOCK_* as multiples of 16 for tensor-core-friendly shapes.
-        - Tune num_warps and num_stages by shape bucket.
-        - Ensure masked loads/stores are correct on boundary tiles.
-        """
+        offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
+        offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
+        offs_k = tl.arange(0, BLOCK_K)
 
-        return
+        acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
+
+        for k_start in range(0, K, BLOCK_K):
+            a_ptrs = a_ptr + offs_m[:, None] * stride_am + (k_start + offs_k)[None, :] * stride_ak
+            b_ptrs = b_ptr + (k_start + offs_k)[:, None] * stride_bk + offs_n[None, :] * stride_bn
+
+            a_mask = (offs_m[:, None] < M) & ((k_start + offs_k)[None, :] < K)
+            b_mask = ((k_start + offs_k)[:, None] < K) & (offs_n[None, :] < N)
+
+            a = tl.load(a_ptrs, mask=a_mask, other=0.0)
+            b = tl.load(b_ptrs, mask=b_mask, other=0.0)
+            acc += tl.dot(a, b)
+
+        c_ptrs = c_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
+        c_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
+        tl.store(c_ptrs, acc, mask=c_mask)
 
 
 def triton_gemm_tiled(
@@ -71,14 +84,27 @@ def triton_gemm_tiled(
     if triton is None:
         raise RuntimeError("Triton is not installed.")
 
-    """
-    TODO: launch tiled kernel.
-        - Allocate / define output matrix
-        - Set grid size
-        - You may use _check_inputs function to get M, N, K dimensions
-        - Call kernel implelemented above with appropriate parameters
-    """
+    M, N, K = _check_inputs(a, b)
+    c = torch.empty((M, N), device=a.device, dtype=torch.float32)
 
-    raise NotImplementedError(
-        "TODO: implement triton_gemm_tiled in src/gemm_lab/kernels/gemm_tiled.py"
+    grid = (triton.cdiv(M, block_m), triton.cdiv(N, block_n))
+    _gemm_kernel_tiled[grid](
+        a,
+        b,
+        c,
+        M,
+        N,
+        K,
+        a.stride(0),
+        a.stride(1),
+        b.stride(0),
+        b.stride(1),
+        c.stride(0),
+        c.stride(1),
+        BLOCK_M=block_m,
+        BLOCK_N=block_n,
+        BLOCK_K=block_k,
+        num_warps=num_warps,
+        num_stages=num_stages,
     )
+    return c

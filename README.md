@@ -86,7 +86,7 @@ make profile  # ncu profiling
 1. Kernel codes: gemm_naive.py, gemm_tiled.py, gemm_fused.py. All must pass correctness tests.
 2. Short report (PDF, 1-2 pages). Include:
   - Screenshot of successful pytest
-  - Screenshot of bench and demo results
+  - Screenshot of bench and demo results (Run experiments for M=N=K=1024, 2048, 4096)
   - Brief explanation of each kernel design
   - Brief profiling analysis (Memory BW, SM utilization) 
   - Any optimization attempts or improvement ideas

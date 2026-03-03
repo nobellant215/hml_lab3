@@ -58,33 +58,37 @@ if triton is not None:
         BLOCK_N: tl.constexpr,
         BLOCK_K: tl.constexpr,
     ):
-        """
-        TODO(student): implement fused linear+bias+relu kernel.
+        pid_m = tl.program_id(0)
+        pid_n = tl.program_id(1)
 
-        Target math:
-        - Base: y = x @ weight_t
-        - Optional bias add: y += bias
-        - Optional activation: y = relu(y)
+        offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
+        offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
+        offs_k = tl.arange(0, BLOCK_K)
 
-        Hints:
-        - Reuse GEMM tiling structure from the tiled kernel.
-        - Bias is per-output feature (`N` dimension).
-        - Apply ReLU after accumulation (and bias add if present).
-        """
-        
+        acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
+
+        for k_start in range(0, K, BLOCK_K):
+            a_ptrs = a_ptr + offs_m[:, None] * stride_am + (k_start + offs_k)[None, :] * stride_ak
+            b_ptrs = b_ptr + (k_start + offs_k)[:, None] * stride_bk + offs_n[None, :] * stride_bn
+
+            a_mask = (offs_m[:, None] < M) & ((k_start + offs_k)[None, :] < K)
+            b_mask = ((k_start + offs_k)[:, None] < K) & (offs_n[None, :] < N)
+
+            a_tile = tl.load(a_ptrs, mask=a_mask, other=0.0)
+            b_tile = tl.load(b_ptrs, mask=b_mask, other=0.0)
+            acc += tl.dot(a_tile, b_tile)
+
         if HAS_BIAS:
-            """
-            TODO: load bias for this block and add to accumulator after matmul
-            """
-            pass
-        
+            b_ptrs = bias_ptr + offs_n * stride_bias
+            b = tl.load(b_ptrs, mask=offs_n < N, other=0.0).to(tl.float32)
+            acc += b[None, :]
+
         if DO_RELU:
-            """
-            TODO: apply relu to accumulator
-            """
-            pass    
-        
-        return
+            acc = tl.maximum(acc, 0.0)
+
+        c_ptrs = c_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
+        c_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
+        tl.store(c_ptrs, acc, mask=c_mask)
 
 
 def fused_linear_relu(
@@ -105,19 +109,33 @@ def fused_linear_relu(
     if debug:
         print("[gemm_fused] launching Triton fused linear+bias+relu kernel")
 
-    """
-    TODO: implement launch path for fused kernel.
-        - Allocate / define output matrix
-        - Set grid size
-        - Use `_check_inputs(...)` to get M, N, K dimensions
-        - Call kernel implelemented above with appropriate parameters
-    
-    Compute y = relu(x @ weight_t + bias) if relu=True else x @ weight_t + bias.
-    """
+    y = torch.empty((M, N), device=x.device, dtype=x.dtype)
 
-    raise NotImplementedError(
-        "TODO: implement fused_linear_relu in src/gemm_lab/kernels/gemm_fused.py"
+    grid = (triton.cdiv(M, block_m), triton.cdiv(N, block_n))
+    _fused_linear_bias_relu_kernel[grid](
+        x,
+        weight_t,
+        bias if bias is not None else y,
+        y,
+        M,
+        N,
+        K,
+        x.stride(0),
+        x.stride(1),
+        weight_t.stride(0),
+        weight_t.stride(1),
+        y.stride(0),
+        y.stride(1),
+        0 if bias is None else bias.stride(0),
+        HAS_BIAS=bias is not None,
+        DO_RELU=relu,
+        BLOCK_M=block_m,
+        BLOCK_N=block_n,
+        BLOCK_K=block_k,
+        num_warps=num_warps,
+        num_stages=num_stages,
     )
+    return y
 
 
 class FusedLinearReLU(nn.Module):
