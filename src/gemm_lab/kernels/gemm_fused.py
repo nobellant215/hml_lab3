@@ -11,7 +11,7 @@ except ImportError:  # pragma: no cover
     tl = None
 
 
-def _validate_triton_inputs(x: torch.Tensor, weight_t: torch.Tensor, bias: torch.Tensor | None) -> None:
+def _check_inputs(x: torch.Tensor, weight_t: torch.Tensor, bias: torch.Tensor | None) -> tuple[int, int, int]:
     if triton is None:
         raise RuntimeError("Fused Triton kernel requires Triton to be installed.")
     if x.dim() != 2 or weight_t.dim() != 2:
@@ -31,25 +31,26 @@ def _validate_triton_inputs(x: torch.Tensor, weight_t: torch.Tensor, bias: torch
             raise ValueError("Bias must be shape [out_features]")
         if not bias.is_cuda or bias.dtype != x.dtype or not bias.is_contiguous():
             raise ValueError("Bias must be contiguous CUDA tensor with same dtype")
+    return x.shape[0], weight_t.shape[1], x.shape[1]
 
 
 if triton is not None:
 
     @triton.jit
     def _fused_linear_bias_relu_kernel(
-        x_ptr,
-        w_ptr,
+        a_ptr,
+        b_ptr,
         bias_ptr,
-        y_ptr,
+        c_ptr,
         M,
         N,
         K,
-        stride_xm,
-        stride_xk,
-        stride_wk,
-        stride_wn,
-        stride_ym,
-        stride_yn,
+        stride_am,
+        stride_ak,
+        stride_bk,
+        stride_bn,
+        stride_cm,
+        stride_cn,
         stride_bias,
         HAS_BIAS: tl.constexpr,
         DO_RELU: tl.constexpr,
@@ -92,24 +93,23 @@ def fused_linear_relu(
     bias: torch.Tensor | None = None,
     *,
     relu: bool = True,
-    debug_kernel: bool = False,
+    debug: bool = False,
     block_m: int = 64,
     block_n: int = 64,
     block_k: int = 32,
     num_warps: int = 4,
     num_stages: int = 2,
 ) -> torch.Tensor:
-    
-    _validate_triton_inputs(x, weight_t, bias)
+    M, N, K = _check_inputs(x, weight_t, bias)
 
-    if debug_kernel:
+    if debug:
         print("[gemm_fused] launching Triton fused linear+bias+relu kernel")
 
     """
     TODO: implement launch path for fused kernel.
         - Allocate / define output matrix
         - Set grid size
-        - You may use _check_inputs function to get M, N, K dimensions
+        - Use `_check_inputs(...)` to get M, N, K dimensions
         - Call kernel implelemented above with appropriate parameters
     
     Compute y = relu(x @ weight_t + bias) if relu=True else x @ weight_t + bias.
@@ -130,13 +130,13 @@ class FusedLinearReLU(nn.Module):
         bias: bool = True,
         relu: bool = True,
         device: str = "cuda",
-        debug_kernel: bool = False,
+        debug: bool = False,
     ):
         super().__init__()
         self.weight = nn.Parameter(torch.empty(out_features, in_features, device=device))
         self.bias = nn.Parameter(torch.empty(out_features, device=device)) if bias else None
         self.relu = relu
-        self.debug_kernel = debug_kernel
+        self.debug = debug
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
@@ -151,5 +151,5 @@ class FusedLinearReLU(nn.Module):
             self.weight.t().contiguous(),
             self.bias,
             relu=self.relu,
-            debug_kernel=self.debug_kernel,
+            debug=self.debug,
         )
