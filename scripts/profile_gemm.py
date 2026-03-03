@@ -35,6 +35,7 @@ def main() -> None:
         str(out),
         sys.executable,
         "scripts/bench_gemm.py",
+        "-f",
         "--m",
         str(args.m),
         "--n",
@@ -46,9 +47,13 @@ def main() -> None:
         "--device",
         args.device,
         "--relu" if args.relu else "--no-relu",
+        "--iters",
+        "3",
         "--cases",
         "naive_gemm+bias+relu",
         "tiled_gemm+bias+relu",
+        "torch.linear",
+        ""
     ]
 
     print("Running:", " ".join(cmd))

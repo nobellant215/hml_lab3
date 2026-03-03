@@ -1,7 +1,5 @@
 # Triton GEMM Lab
 
-This repo is a lab skeleton for Triton GEMM optimization with a fused linear path.
-
 ## Repo Tree
 
 ```text
@@ -82,3 +80,18 @@ make bench    # Compare gemm+bias+relu across torch, fused, tiled, naive paths
 make demo     # Run MLP with custom GeMM kernels
 make profile  # ncu profiling 
 ```
+
+## Deliverables
+
+1. Kernel codes: gemm_naive.py, gemm_tiled.py, gemm_fused.py. All must pass correctness tests.
+2. Short report (PDF, 1-2 pages). Include:
+  - Screenshot of successful pytest
+  - Screenshot of bench and demo results
+  - Brief explanation of each kernel design
+  - Brief profiling analysis (Memory BW, SM utilization) 
+  - Any optimization attempts or improvement ideas
+
+Download the generated NCU profiling report to your local machine.
+To veiw the report in a GUI, install Nsight Compute on your laptop:
+https://developer.nvidia.com/tools-overview/nsight-compute/get-started
+
