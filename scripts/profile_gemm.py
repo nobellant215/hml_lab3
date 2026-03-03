@@ -29,13 +29,13 @@ def main() -> None:
         ncu,
         "--set",
         "full",
+        "-f",
         "--target-processes",
         "all",
         "--export",
         str(out),
         sys.executable,
         "scripts/bench_gemm.py",
-        "-f",
         "--m",
         str(args.m),
         "--n",
@@ -47,13 +47,13 @@ def main() -> None:
         "--device",
         args.device,
         "--relu" if args.relu else "--no-relu",
+        "--warmup",
+        "0",
         "--iters",
-        "3",
+        "1",
         "--cases",
         "naive_gemm+bias+relu",
         "tiled_gemm+bias+relu",
-        "torch.linear",
-        ""
     ]
 
     print("Running:", " ".join(cmd))
