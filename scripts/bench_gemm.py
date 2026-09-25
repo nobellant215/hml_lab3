@@ -90,27 +90,24 @@ def main():
             "relu": args.relu,
             **env,
         }
-        try:
-            with torch.inference_mode():
-                got = fns[name]()
-                torch.testing.assert_close(got, reference, atol=0.02, rtol=0.02)
-                row.update(
-                    measure(
-                        fns[name],
-                        device=a.device,
-                        warmup=args.warmup,
-                        iters=args.iters,
-                        repeats=args.repeats,
-                    )
-                )
+        with torch.inference_mode():
+            got = fns[name]()
+            torch.testing.assert_close(got, reference, atol=0.02, rtol=0.02)
             row.update(
-                status="ok",
-                gemm_equivalent_tflops=tflops(
-                    args.m, args.n, args.k, row["median_ms"] / 1000
-                ),
+                measure(
+                    fns[name],
+                    device=a.device,
+                    warmup=args.warmup,
+                    iters=args.iters,
+                    repeats=args.repeats,
+                )
             )
-        except NotImplementedError as e:
-            row.update(status="not_implemented", reason=str(e))
+        row.update(
+            status="ok",
+            gemm_equivalent_tflops=tflops(
+                args.m, args.n, args.k, row["median_ms"] / 1000
+            ),
+        )
         print(json.dumps(row))
         with args.out.open("a") as f:
             f.write(json.dumps(row) + "\n")

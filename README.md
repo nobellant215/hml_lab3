@@ -2,7 +2,7 @@
 
 Learn how tile shape, GPU scheduling, memory reuse, and epilogue fusion affect ML inference. The starting GEMM is already tiled: Triton makes a scalar-versus-tiled exercise a poor optimization baseline. Your task is to improve a sensible blocked implementation and explain when each change helps.
 
-This is an inference-only lab. Use one allocated A100, H100, or H200 GPU; do not run GPU experiments on a cluster login node. Record the actual GPU variant, memory/MIG allocation, and software versions. No particular GPU's latency or speedup is an expected answer.
+This is an inference-only lab. Run FP16 Triton kernels on a full A100, H100, or H200 GPU using the course CUDA environment. Record the GPU model and software versions, and compare implementations on the same GPU.
 
 ## Setup and first run
 
@@ -18,7 +18,7 @@ make demo
 
 `make test` checks the provided baseline and helpers. CUDA tests skip on a CPU-only machine: a green CPU run does not validate a GPU kernel. `make test-student` also exercises task C and is expected to fail with `NotImplementedError` until that task is complete. The optimized entry point initially delegates to the baseline and passes output tests; passing tests alone does not complete task B.
 
-Dependencies specify API minimums, not a calibrated cluster image. Record your actual versions and use the same environment for every within-report comparison.
+Use the same software environment for every comparison.
 
 ## Required contract
 
@@ -80,13 +80,13 @@ The MLP demo uses fixed synthetic inputs and shared weights, verifies output agr
 
 `bench_gemm.py` writes append-only JSONL rows with device metadata, inputs, repetitions, and raw repeated batch timings. Its metric is **synchronized wrapper latency**, including dispatch and allocations, not isolated kernel duration. Compile and correctness-check before warmup. Read medians together with the min/max spread; rerun if the GPU was shared or unstable. Compare implementations within the same GPU allocation. Do not divide a baseline from one GPU by a candidate from another.
 
-Use Nsight Compute for diagnostic evidence where cluster permissions allow it:
+Use Nsight Compute for diagnostic evidence on the course GPU cluster:
 
 ```bash
 python scripts/profile_gemm.py --case optimized --m 1024 --n 1024 --k 1024
 ```
 
-Profile results must not replace normal timing runs. The short capture includes only a few launches; select your GEMM kernel rather than tensor-initialization kernels. If profiling is unavailable, use controlled ablations and state the limit of your evidence.
+Profile results must not replace normal timing runs. The short capture includes only a few launches; select your GEMM kernel rather than tensor-initialization kernels.
 
 ## Deliverables
 
