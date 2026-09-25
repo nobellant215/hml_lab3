@@ -20,7 +20,7 @@ make demo
 
 Use the same software environment for every comparison.
 
-## Required contract
+## Inputs and expected behavior
 
 - A: contiguous FP16 CUDA tensor `(M,K)`. B: FP16 CUDA `(K,N)`, either contiguous or a transposed contiguous view. Both are on the same device.
 - Positive dimensions; arbitrary M/N/K tails must work. FP32 accumulation and FP16 GEMM output.
@@ -63,7 +63,7 @@ The default run compares torch, baseline, and optimized GEMM on the same tensors
 
 ## Task C — Fuse linear, bias, and optional ReLU
 
-Implement `fused_linear_relu` in `src/gemm_lab/kernels/gemm_fused.py` with one Triton compute kernel. Handle bias present/absent and ReLU on/off. Read a transposed weight view directly; do not copy weights every forward call. Do not materialize a separate GEMM output or call PyTorch bias/ReLU on the result.
+Implement `fused_linear_relu` in `src/gemm_lab/kernels/gemm_fused.py` with one Triton compute kernel. Handle bias present/absent and ReLU on/off. Read a transposed weight view directly; do not copy weights every forward call. Do not store a separate GEMM output or call PyTorch bias/ReLU on the result.
 
 ```bash
 make test-student
@@ -72,7 +72,7 @@ python scripts/bench_gemm.py --workload linear --m 512 --n 512 --k 512 --no-relu
 python scripts/run_mlp_demo.py --fused
 ```
 
-The unfused baseline stores a FP32 GEMM intermediate and then performs the epilogue so it has the same rounding contract as fusion. PyTorch linear is a practical comparator with slightly different rounding. The public FP16 checks use bounded inputs and `atol=rtol=0.02`; these are development checks, not a guarantee for arbitrary input magnitudes.
+The unfused baseline stores a FP32 GEMM intermediate and then performs the epilogue so it has the same rounding behavior as fusion. PyTorch linear is a practical comparator with slightly different rounding. The public FP16 checks use bounded inputs and `atol=rtol=0.02`; these are development checks, not a guarantee for arbitrary input magnitudes.
 
 The MLP demo uses fixed synthetic inputs and shared weights, verifies output agreement, and measures a full batch every iteration. It does not test trained-model accuracy.
 

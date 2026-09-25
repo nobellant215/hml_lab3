@@ -64,7 +64,7 @@ def main():
             "optimized": lambda: gemm(a, b, cfg=GemmConfig("optimized")),
         }
     else:
-        # FP32 intermediate gives the same epilogue rounding contract as fusion.
+        # FP32 intermediate gives the same epilogue rounding behavior as fusion.
         # torch is a practical comparator and can round slightly differently.
         fns = {
             "torch": lambda: (

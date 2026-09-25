@@ -1,4 +1,4 @@
-"""Provided input contract, shared by baseline and student entry points."""
+"""Provided input checks, shared by baseline and student entry points."""
 
 import torch
 
@@ -11,7 +11,7 @@ def check_gemm_inputs(a: torch.Tensor, b: torch.Tensor) -> tuple[int, int, int]:
     if not a.is_cuda or a.device != b.device:
         raise ValueError("Expected tensors on the same CUDA device.")
     if a.dtype != b.dtype or a.dtype != torch.float16:
-        raise ValueError("The required lab contract uses FP16 inputs.")
+        raise ValueError("This lab requires FP16 inputs.")
     if not a.is_contiguous() or not (b.is_contiguous() or b.t().is_contiguous()):
         raise ValueError(
             "A must be contiguous; B may also be a transposed contiguous view."
