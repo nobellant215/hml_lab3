@@ -2,7 +2,9 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
-results/*.csv
+results/
 profiles/*
 *.ncu-rep
 *.sqlite
+
+*.egg-info/

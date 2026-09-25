@@ -18,3 +18,5 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+
+markers = ["student: requires the fused student implementation"]

@@ -1,13 +1,16 @@
-.PHONY: test bench demo profile
+.PHONY: test test-student bench demo profile
 
 test:
-	pytest -q
+	python -m pytest -q -m "not student"
+
+test-student:
+	python -m pytest -q
 
 bench:
-	python scripts/bench_gemm.py --dtype fp16 --device cuda
+	python scripts/bench_gemm.py
 
 demo:
-	python scripts/run_mlp_demo.py --dtype fp16 --compile 0
+	python scripts/run_mlp_demo.py
 
 profile:
-	python scripts/profile_gemm.py --dtype fp16 --device cuda
+	python scripts/profile_gemm.py

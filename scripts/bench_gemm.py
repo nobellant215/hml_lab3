@@ -1,82 +1,119 @@
-from __future__ import annotations
+"""Compare equivalent workloads; compilation occurs before repeated timing."""
 
 import argparse
-from collections.abc import Callable
-
+import json
+from pathlib import Path
 import torch
-import torch.nn.functional as F
-
-from gemm_lab.kernels.gemm_fused import fused_linear_relu
 from gemm_lab.ops import GemmConfig, gemm
-from gemm_lab.utils.bench import bench_once, tflops
+from gemm_lab.kernels.gemm_tiled import triton_gemm_tiled
+from gemm_lab.kernels.gemm_fused import fused_linear_relu
+from gemm_lab.utils.bench import measure, environment, tflops
 
 
-def _build_bench_fns(
-    bias: torch.Tensor,
-    relu: bool,
-) -> dict[str, Callable[[torch.Tensor, torch.Tensor], torch.Tensor]]:
-    def post_op(out: torch.Tensor) -> torch.Tensor:
-        out = out + bias
-        return torch.relu(out) if relu else out
-
-    def torch_linear(x: torch.Tensor, weight_t: torch.Tensor) -> torch.Tensor:
-        out = F.linear(x, weight_t.t(), bias)
-        return torch.relu(out) if relu else out
-
-    return {
-        "torch.linear": torch_linear,
-        "fused_linear": lambda x, weight_t: fused_linear_relu(x, weight_t, bias, relu=relu),
-        "tiled_gemm+bias+relu": lambda x, weight_t: post_op(gemm(
-            x,
-            weight_t,
-            cfg=GemmConfig(kernel="tiled"),
-        )),
-        "naive_gemm+bias+relu": lambda x, weight_t: post_op(gemm(
-            x,
-            weight_t,
-            cfg=GemmConfig(kernel="naive"),
-        )),
-    }
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--m", type=int, default=4096)
-    parser.add_argument("--n", type=int, default=4096)
-    parser.add_argument("--k", type=int, default=4096)
-    parser.add_argument("--dtype", choices=["fp16", "bf16", "fp32"], default="fp16")
-    parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--relu", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument(
-        "--cases",
-        nargs="+",
-        choices=["torch.linear", "fused_linear", "tiled_gemm+bias+relu", "naive_gemm+bias+relu"],
-        default=["torch.linear", "fused_linear", "tiled_gemm+bias+relu", "naive_gemm+bias+relu"],
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--m", type=int, default=512)
+    p.add_argument("--n", type=int, default=512)
+    p.add_argument("--k", type=int, default=512)
+    p.add_argument("--workload", choices=["gemm", "linear"], default="gemm")
+    p.add_argument(
+        "--cases", nargs="+", choices=["torch", "baseline", "optimized", "fused"]
     )
-    parser.add_argument("--warmup", type=int, default=20)
-    parser.add_argument("--iters", type=int, default=100)
-    args = parser.parse_args()
-
-    dtype_map = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp32": torch.float32}
-    dtype = dtype_map[args.dtype]
-
-    if args.device == "cuda" and not torch.cuda.is_available():
-        raise RuntimeError("CUDA requested but unavailable")
-
-    a = torch.randn((args.m, args.k), device=args.device, dtype=dtype)
-    b = torch.randn((args.k, args.n), device=args.device, dtype=dtype)
-    bias = torch.randn((args.n,), device=args.device, dtype=dtype)
-
-    bench_fns = _build_bench_fns(bias, args.relu)
-
-    print(
-        f"workload=gemm+bias{'+relu' if args.relu else ''} shape={args.m}x{args.n}x{args.k} "
-        f"dtype={args.dtype} device={args.device} relu={args.relu}"
+    p.add_argument("--transpose-b", action="store_true")
+    p.add_argument("--relu", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--warmup", type=int, default=10)
+    p.add_argument("--iters", type=int, default=20)
+    p.add_argument("--repeats", type=int, default=5)
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--out", type=Path, default=Path("results/gemm.jsonl"))
+    args = p.parse_args()
+    if not torch.cuda.is_available():
+        p.error("A CUDA GPU with Triton is required")
+    if min(args.m, args.n, args.k) < 1:
+        p.error("Matrix dimensions must be positive")
+    torch.manual_seed(args.seed)
+    # FP32 oracle uses IEEE precision, independent of GEMM dispatch.
+    torch.backends.cuda.matmul.allow_tf32 = False
+    a = torch.randn(args.m, args.k, device="cuda", dtype=torch.float16) * 0.25
+    b = (
+        torch.randn(args.n, args.k, device="cuda", dtype=torch.float16).t()
+        if args.transpose_b
+        else torch.randn(args.k, args.n, device="cuda", dtype=torch.float16)
+    ) * 0.25
+    bias = torch.randn(args.n, device="cuda", dtype=torch.float16) * 0.25
+    cases = args.cases or (
+        ["torch", "baseline", "optimized"]
+        if args.workload == "gemm"
+        else ["torch", "baseline", "fused"]
     )
-    for name in args.cases:
-        fn = bench_fns[name]
-        sec = bench_once(fn, a, b, warmup=args.warmup, iters=args.iters)
-        print(f"{name:12s} {tflops(args.m, args.n, args.k, sec):8.2f} TFLOP/s  ({sec*1e3:.3f} ms)")
+    if (args.workload == "gemm" and "fused" in cases) or (
+        args.workload == "linear" and "optimized" in cases
+    ):
+        p.error("fused is a linear case; optimized is a GEMM case")
+
+    def epilogue(y):
+        y = y + bias.float()
+        return (torch.relu(y) if args.relu else y).half()
+
+    reference = a.float() @ b.float()
+    reference = reference.half() if args.workload == "gemm" else epilogue(reference)
+    if args.workload == "gemm":
+        fns = {
+            "torch": lambda: a @ b,
+            "baseline": lambda: gemm(a, b),
+            "optimized": lambda: gemm(a, b, cfg=GemmConfig("optimized")),
+        }
+    else:
+        # FP32 intermediate gives the same epilogue rounding contract as fusion.
+        # torch is a practical comparator and can round slightly differently.
+        fns = {
+            "torch": lambda: (
+                torch.relu(torch.nn.functional.linear(a, b.t(), bias))
+                if args.relu
+                else torch.nn.functional.linear(a, b.t(), bias)
+            ),
+            "baseline": lambda: epilogue(
+                triton_gemm_tiled(a, b, output_dtype=torch.float32)
+            ),
+            "fused": lambda: fused_linear_relu(a, b, bias, relu=args.relu),
+        }
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    env = environment(a.device)
+    for name in cases:
+        row = {
+            "implementation": name,
+            "workload": args.workload,
+            "shape": [args.m, args.n, args.k],
+            "dtype": "float16",
+            "seed": args.seed,
+            "transpose_b": args.transpose_b,
+            "relu": args.relu,
+            **env,
+        }
+        try:
+            with torch.inference_mode():
+                got = fns[name]()
+                torch.testing.assert_close(got, reference, atol=0.02, rtol=0.02)
+                row.update(
+                    measure(
+                        fns[name],
+                        device=a.device,
+                        warmup=args.warmup,
+                        iters=args.iters,
+                        repeats=args.repeats,
+                    )
+                )
+            row.update(
+                status="ok",
+                gemm_equivalent_tflops=tflops(
+                    args.m, args.n, args.k, row["median_ms"] / 1000
+                ),
+            )
+        except NotImplementedError as e:
+            row.update(status="not_implemented", reason=str(e))
+        print(json.dumps(row))
+        with args.out.open("a") as f:
+            f.write(json.dumps(row) + "\n")
 
 
 if __name__ == "__main__":

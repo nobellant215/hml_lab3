@@ -16,11 +16,15 @@ class MyLinear(nn.Module):
         *,
         bias: bool = True,
         device: str = "cuda",
-        kernel: str = "tiled",
+        kernel: str = "baseline",
     ):
         super().__init__()
-        self.weight = nn.Parameter(torch.empty(out_features, in_features, device=device))
-        self.bias = nn.Parameter(torch.empty(out_features, device=device)) if bias else None
+        self.weight = nn.Parameter(
+            torch.empty(out_features, in_features, device=device)
+        )
+        self.bias = (
+            nn.Parameter(torch.empty(out_features, device=device)) if bias else None
+        )
         self.cfg = GemmConfig(kernel=kernel)  # type: ignore[arg-type]
         self.reset_parameters()
 
@@ -32,7 +36,7 @@ class MyLinear(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: [B, in_features], weight.T: [in_features, out_features]
-        y = gemm(x, self.weight.t().contiguous(), cfg=self.cfg).to(x.dtype)
+        y = gemm(x, self.weight.t(), cfg=self.cfg).to(x.dtype)
         if self.bias is not None:
             y = y + self.bias
         return y

@@ -2,28 +2,14 @@ from __future__ import annotations
 
 import torch
 
+from gemm_lab.validation import check_gemm_inputs
+
 try:
     import triton
     import triton.language as tl
 except ImportError:  # pragma: no cover
     triton = None
     tl = None
-
-
-def _check_inputs(a: torch.Tensor, b: torch.Tensor) -> tuple[int, int, int]:
-    if a.dim() != 2 or b.dim() != 2:
-        raise ValueError("Expected rank-2 tensors.")
-    if a.shape[1] != b.shape[0]:
-        raise ValueError(f"Incompatible shapes: {tuple(a.shape)} x {tuple(b.shape)}")
-    if not a.is_cuda or not b.is_cuda:
-        raise ValueError("Triton GEMM expects CUDA tensors.")
-    if not a.is_contiguous() or not b.is_contiguous():
-        raise ValueError("Starter kernel expects contiguous inputs.")
-    if a.dtype != b.dtype:
-        raise ValueError("Input dtypes must match.")
-    if a.dtype not in (torch.float16, torch.bfloat16, torch.float32):
-        raise ValueError("Supported dtypes: fp16, bf16, fp32")
-    return a.shape[0], b.shape[1], a.shape[1]
 
 
 if triton is not None:
@@ -56,8 +42,16 @@ if triton is not None:
         acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
 
         for k_start in range(0, K, BLOCK_K):
-            a_ptrs = a_ptr + offs_m[:, None] * stride_am + (k_start + offs_k)[None, :] * stride_ak
-            b_ptrs = b_ptr + (k_start + offs_k)[:, None] * stride_bk + offs_n[None, :] * stride_bn
+            a_ptrs = (
+                a_ptr
+                + offs_m[:, None] * stride_am
+                + (k_start + offs_k)[None, :] * stride_ak
+            )
+            b_ptrs = (
+                b_ptr
+                + (k_start + offs_k)[:, None] * stride_bk
+                + offs_n[None, :] * stride_bn
+            )
 
             a_mask = (offs_m[:, None] < M) & ((k_start + offs_k)[None, :] < K)
             b_mask = ((k_start + offs_k)[:, None] < K) & (offs_n[None, :] < N)
@@ -80,12 +74,15 @@ def triton_gemm_tiled(
     block_k: int = 32,
     num_warps: int = 4,
     num_stages: int = 1,
+    output_dtype: torch.dtype | None = None,
 ) -> torch.Tensor:
     if triton is None:
         raise RuntimeError("Triton is not installed.")
 
-    M, N, K = _check_inputs(a, b)
-    c = torch.empty((M, N), device=a.device, dtype=torch.float32)
+    M, N, K = check_gemm_inputs(a, b)
+    if output_dtype not in (None, a.dtype, torch.float32):
+        raise ValueError("Output dtype must be the input dtype or FP32.")
+    c = torch.empty((M, N), device=a.device, dtype=output_dtype or a.dtype)
 
     grid = (triton.cdiv(M, block_m), triton.cdiv(N, block_n))
     _gemm_kernel_tiled[grid](
